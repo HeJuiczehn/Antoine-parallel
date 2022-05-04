@@ -1,0 +1,399 @@
+      SUBROUTINE  QPRN (VFIN,VINI,F,RBL1,RBL2)
+      IMPLICIT INTEGER (A-U)
+      IMPLICIT DOUBLE PRECISION (V-Z)
+      DIMENSION RBL1(4,*),RBL2(4,*),F(*)
+      DIMENSION VINI(*),VFIN(*)
+      COMMON IOUT,IPRI,ORDI,IPREC,CAS
+      COMMON /AAA2/ NBI,NBF,QBL1,QBL2,QBLI,IRVT
+      COMMON /FONCT/ JUMP,TFIX
+      COMMON /INIFIN/ INI1,FIN1,INI2,FIN2
+      COMMON /INIMOT/ DMAT,RBL(3),O1,O2,OI
+      DO 1 Q1=1,QBL1
+      INI1=RBL1(1,Q1)
+      FIN1=RBL1(2,Q1)
+      SI1=RBL1(3,Q1)
+      SF1=RBL1(4,Q1)
+      DO 1 Q2=1,QBL2
+      SI2=RBL2(3,Q2)
+      SF2=RBL2(4,Q2)
+      IF(TFIX.EQ.0) THEN
+      IF(SI1+SI2.GT.JUMP) GO TO 1
+      IF(SF1+SF2.GT.JUMP) GO TO 1
+      ELSE
+      IF(SI1+SI2.NE.JUMP) GO TO 1
+      IF(SF1+SF2.NE.JUMP) GO TO 1
+      END IF
+      INI2=RBL2(1,Q2)
+      FIN2=RBL2(2,Q2)
+      IF(IPREC.EQ.2) THEN
+      IF(IRVT.EQ.1) THEN
+      CALL QPRNP (VFIN,VINI,F(O1),F(O2),F(DMAT))
+      ELSE
+      CALL QPRNM (VFIN,VINI,F(O1),F(O2),F(DMAT))
+      END IF
+      ELSE
+      IF(IRVT.EQ.1) THEN
+      CALL SPRNP (VFIN,VINI,F(O1),F(O2),F(DMAT))
+      ELSE
+      CALL SPRNM (VFIN,VINI,F(O1),F(O2),F(DMAT))
+      END IF
+      END IF
+1     CONTINUE
+      RETURN
+      END
+*
+************************************************************************
+*
+      SUBROUTINE  IPRN (VFIN,VINI,F,RBL1,RBL2)
+      IMPLICIT INTEGER (A-U)
+      IMPLICIT DOUBLE PRECISION (V-Z)
+      DIMENSION RBL1(5,*),RBL2(5,*),F(*)
+      DIMENSION VINI(*),VFIN(*)
+      COMMON IOUT,IPRI,ORDI,IPREC,CAS
+      COMMON /AAA2/ NBI,NBF,QBL1,QBL2,QBLI,IRVT
+      COMMON /FONCT/ JUMP,TFIX
+      COMMON /INIFIN/ INI1,FIN1,INI2,FIN2
+      COMMON /INIMOT/ DMAT,RBL(3),O1,O2,OI
+      DO 1 Q1=1,QBL1
+      INI1=RBL1(1,Q1)
+      FIN1=RBL1(2,Q1)
+      SI1=RBL1(3,Q1)
+      SF1=RBL1(4,Q1)
+      OP1=RBL1(5,Q1)
+      DO 1 Q2=1,QBL2
+      OP2=RBL2(5,Q2)
+***   WRITE(IOUT,*) 'Q12',Q1,Q2,OP1,OP2
+      IF(OP1.NE.OP2) GO TO 1
+      SI2=RBL2(3,Q2)
+      SF2=RBL2(4,Q2)
+      IF(TFIX.EQ.0) THEN
+      IF(SI1+SI2.GT.JUMP) GO TO 1
+      IF(SF1+SF2.GT.JUMP) GO TO 1
+      ELSE
+      IF(SI1+SI2.NE.JUMP) GO TO 1
+      IF(SF1+SF2.NE.JUMP) GO TO 1
+      END IF
+      INI2=RBL2(1,Q2)
+      FIN2=RBL2(2,Q2)
+      IF(IPREC.EQ.2) THEN
+      IF(IRVT.EQ.1) THEN
+      CALL QPRNP (VFIN,VINI,F(O1),F(O2),F(DMAT))
+      ELSE
+      CALL QPRNM (VFIN,VINI,F(O1),F(O2),F(DMAT))
+      END IF
+      ELSE
+      IF(IRVT.EQ.1) THEN
+      CALL SPRNP (VFIN,VINI,F(O1),F(O2),F(DMAT))
+      ELSE
+      CALL SPRNM (VFIN,VINI,F(O1),F(O2),F(DMAT))
+      END IF
+      END IF
+1     CONTINUE
+      RETURN
+      END
+*
+************************************************************************
+*
+      SUBROUTINE QPRNP (VFIN,VINI,PN1,PN2,ZPN)
+      use omp_lib
+      IMPLICIT INTEGER (A-U)
+      IMPLICIT DOUBLE PRECISION (V-Z)
+      DIMENSION VINI(*),VFIN(*),PN1(3,*),PN2(3,*),ZPN(*)
+      DOUBLE PRECISION,DIMENSION(:),ALLOCATABLE::VINI_TEMPN,VINI_TEMPNN
+      COMMON IOUT,IPRI,ORDI,IPREC,CAS
+      COMMON /INIFIN/ INI1,FIN1,INI2,FIN2
+      COMMON /LITER/ NIT
+*      write(IOUT,*)"***************************************************INI1,FIN1,INI2,FIN2",INI1,FIN1,INI2,FIN2
+      NMIN = minval(PN1(1,INI1:FIN1))+minval(PN2(1,INI2:FIN2))
+      NMAX = maxval(PN1(1,INI1:FIN1))+maxval(PN2(1,INI2:FIN2))
+      NNMIN = minval(PN1(2,INI1:FIN1))+minval(PN2(2,INI2:FIN2))
+      NNMAX = maxval(PN1(2,INI1:FIN1))+maxval(PN2(2,INI2:FIN2))
+!$OMP PARALLEL DEFAULT(shared) PRIVATE(VINI_TEMPN,VINI_TEMPNN,I1,II1,K1,N,NN,KV)
+      ALLOCATE(VINI_TEMPN(NMIN:NMAX))
+      ALLOCATE(VINI_TEMPNN(NNMIN:NNMAX))
+      VINI_TEMPN = 0
+      VINI_TEMPNN = 0
+!$OMP DO
+      DO L1=INI1,FIN1
+      I1=PN1(1,L1)
+      II1=PN1(2,L1)
+      K1=PN1(3,L1)
+      DO L2=INI2,FIN2
+      N=I1+PN2(1,L2)
+      NN=II1+PN2(2,L2)
+      KV=K1+PN2(3,L2)
+*      write(0,*)L1,L2,NN
+      VINI_TEMPN(N)=VINI_TEMPN(N)+VINI(NN)*ZPN(KV)
+      VINI_TEMPNN(NN)=VINI_TEMPNN(NN)+VINI(N)*ZPN(KV)
+*      VFIN(N)=VFIN(N)+VINI(NN)*ZPN(KV)
+*      VFIN(NN)=VFIN(NN)+VINI(N)*ZPN(KV)
+      END DO
+      END DO
+!$OMP END DO
+!$OMP CRITICAL
+      DO INDEX=NMIN,NMAX
+      VFIN(INDEX) = VFIN(INDEX) + VINI_TEMPN(INDEX)
+      END DO
+      DO INDEX=NNMIN,NNMAX
+      VFIN(INDEX) = VFIN(INDEX) + VINI_TEMPNN(INDEX)
+      END DO
+      DEALLOCATE(VINI_TEMPN,VINI_TEMPNN)
+!$OMP END CRITICAL
+!$OMP END PARALLEL
+      RETURN
+      END
+*
+************************************************************************
+*
+      SUBROUTINE QPRNM (VFIN,VINI,PN1,PN2,ZPN)
+      IMPLICIT INTEGER (A-U)
+      IMPLICIT DOUBLE PRECISION (V-Z)
+      DIMENSION VINI(*),VFIN(*),PN1(3,*),PN2(3,*),ZPN(*)
+      COMMON IOUT,IPRI,ORDI,IPREC,CAS
+      COMMON /INIFIN/ INI1,FIN1,INI2,FIN2
+      COMMON /LITER/ NIT
+      DO 2 L1=INI1,FIN1
+      I1=PN1(1,L1)
+      II1=PN1(2,L1)
+      K1=PN1(3,L1)
+      DO 2 L2=INI2,FIN2
+      N=I1+PN2(1,L2)
+      NN=II1+PN2(2,L2)
+      KV=K1+PN2(3,L2)
+**    WRITE(IOUT,*)  'PN-',N,NN,-ZPN(KV),KV
+      VFIN(N)=VFIN(N)-VINI(NN)*ZPN(KV)
+      VFIN(NN)=VFIN(NN)-VINI(N)*ZPN(KV)
+2     CONTINUE
+      RETURN
+      END
+*
+************************************************************************
+*
+      SUBROUTINE SPRNP (VFIN,VINI,PN1,PN2,ZPN)
+      IMPLICIT INTEGER (A-U)
+***   IMPLICIT DOUBLE PRECISION (V-Z)
+      DIMENSION VINI(*),VFIN(*),PN1(3,*),PN2(3,*),ZPN(*)
+      COMMON IOUT,IPRI,ORDI,IPREC,CAS
+      COMMON /INIFIN/ INI1,FIN1,INI2,FIN2
+      COMMON /LITER/ NIT
+      DO 2 L1=INI1,FIN1
+      I1=PN1(1,L1)
+      II1=PN1(2,L1)
+      K1=PN1(3,L1)
+      DO 2 L2=INI2,FIN2
+      N=I1+PN2(1,L2)
+      NN=II1+PN2(2,L2)
+      KV=K1+PN2(3,L2)
+      VFIN(N)=VFIN(N)+VINI(NN)*ZPN(KV)
+      VFIN(NN)=VFIN(NN)+VINI(N)*ZPN(KV)
+2     CONTINUE
+      RETURN
+      END
+*
+************************************************************************
+*
+      SUBROUTINE SPRNM (VFIN,VINI,PN1,PN2,ZPN)
+      IMPLICIT INTEGER (A-U)
+**    IMPLICIT DOUBLE PRECISION (V-Z)
+      DIMENSION VINI(*),VFIN(*),PN1(3,*),PN2(3,*),ZPN(*)
+      COMMON IOUT,IPRI,ORDI,IPREC,CAS
+      COMMON /INIFIN/ INI1,FIN1,INI2,FIN2
+      COMMON /LITER/ NIT
+      DO 2 L1=INI1,FIN1
+      I1=PN1(1,L1)
+      II1=PN1(2,L1)
+      K1=PN1(3,L1)
+      DO 2 L2=INI2,FIN2
+      N=I1+PN2(1,L2)
+      NN=II1+PN2(2,L2)
+      KV=K1+PN2(3,L2)
+      VFIN(N)=VFIN(N)-VINI(NN)*ZPN(KV)
+      VFIN(NN)=VFIN(NN)-VINI(N)*ZPN(KV)
+2     CONTINUE
+      RETURN
+      END
+*
+************************************************************************
+*
+      SUBROUTINE  QPRNI (VFIN,VINI,F,RBLI,RBL2)
+      IMPLICIT INTEGER (A-U)
+      IMPLICIT DOUBLE PRECISION (V-Z)
+      DIMENSION RBLI(3,*),RBL2(4,*),F(*)
+      DIMENSION VINI(*),VFIN(*)
+      COMMON IOUT,IPRI,ORDI,IPREC,CAS
+      COMMON /AAA2/ NBI,NBF,QBL1,QBL2,QBLI,IRVT
+      COMMON /FONCT/ JUMP,TFIX
+      COMMON /INIFIN/ INI1,FIN1,INI2,FIN2
+      COMMON /INIMOT/ DMAT,RBL(3),O1,O2,OI
+      DO 1 Q1=1,QBLI
+      INI1=RBLI(1,Q1)
+      FIN1=RBLI(2,Q1)
+      S1=RBLI(3,Q1)
+      DO 1 Q2=1,QBL2
+      SI2=RBL2(3,Q2)
+      SF2=RBL2(4,Q2)
+      IF(TFIX.EQ.0) THEN
+      IF(S1+MAX(SI2,SF2).GT.JUMP) GO TO 1
+      ELSE
+      IF(S1+SI2.NE.JUMP) GO TO 1
+      IF(S1+SF2.NE.JUMP) GO TO 1
+      END IF
+      INI2=RBL2(1,Q2)
+      FIN2=RBL2(2,Q2)
+      IF(IPREC.EQ.2) THEN
+      IF(IRVT.EQ.1) THEN
+      CALL QPRNIP (VFIN,VINI,F(OI),F(O2),F(DMAT))
+      ELSE
+      CALL QPRNIM (VFIN,VINI,F(OI),F(O2),F(DMAT))
+      END IF
+      ELSE
+      IF(IRVT.EQ.1) THEN
+      CALL SPRNIP (VFIN,VINI,F(OI),F(O2),F(DMAT))
+      ELSE
+      CALL SPRNIM (VFIN,VINI,F(OI),F(O2),F(DMAT))
+      END IF
+      END IF
+1     CONTINUE
+      RETURN
+      END
+*
+************************************************************************
+*
+      SUBROUTINE  IPRNI (VFIN,VINI,F,RBLI,RBL2)
+      IMPLICIT INTEGER (A-U)
+      IMPLICIT DOUBLE PRECISION (V-Z)
+      DIMENSION RBLI(4,*),RBL2(5,*),F(*)
+      DIMENSION VINI(*),VFIN(*)
+      COMMON IOUT,IPRI,ORDI,IPREC,CAS
+      COMMON /AAA2/ NBI,NBF,QBL1,QBL2,QBLI,IRVT
+      COMMON /FONCT/ JUMP,TFIX
+      COMMON /INIFIN/ INI1,FIN1,INI2,FIN2
+      COMMON /INIMOT/ DMAT,RBL(3),O1,O2,OI
+**    WRITE(IOUT,*) 'QPRNI',QBLI,QBL2
+      DO 1 Q1=1,QBLI
+      INI1=RBLI(1,Q1)
+      FIN1=RBLI(2,Q1)
+      S1=RBLI(3,Q1)
+      OP1=RBLI(4,Q1)
+      DO 1 Q2=1,QBL2
+      OP2=RBL2(5,Q2)
+      IF(OP1.NE.OP2) GO TO 1
+      SI2=RBL2(3,Q2)
+      SF2=RBL2(4,Q2)
+      IF(TFIX.EQ.0) THEN
+      IF(S1+MAX(SI2,SF2).GT.JUMP) GO TO 1
+      ELSE
+      IF(S1+SI2.NE.JUMP) GO TO 1
+      IF(S1+SF2.NE.JUMP) GO TO 1
+      END IF
+      INI2=RBL2(1,Q2)
+      FIN2=RBL2(2,Q2)
+      IF(IPREC.EQ.2) THEN
+      IF(IRVT.EQ.1) THEN
+      CALL QPRNIP (VFIN,VINI,F(OI),F(O2),F(DMAT))
+      ELSE
+      CALL QPRNIM (VFIN,VINI,F(OI),F(O2),F(DMAT))
+      END IF
+      ELSE
+      IF(IRVT.EQ.1) THEN
+      CALL SPRNIP (VFIN,VINI,F(OI),F(O2),F(DMAT))
+      ELSE
+      CALL SPRNIM (VFIN,VINI,F(OI),F(O2),F(DMAT))
+      END IF
+      END IF
+1     CONTINUE
+      RETURN
+      END
+*
+************************************************************************
+*
+      SUBROUTINE QPRNIP (VFIN,VINI,PN1,PN2,ZPN)
+      IMPLICIT INTEGER (A-U)
+      IMPLICIT DOUBLE PRECISION (V-Z)
+      DIMENSION VINI(*),VFIN(*),PN1(2,*),PN2(3,*),ZPN(*)
+      COMMON IOUT,IPRI,ORDI,IPREC,CAS
+      COMMON /INIFIN/ INI1,FIN1,INI2,FIN2
+      DO 1 L1=INI1,FIN1
+      I1=PN1(1,L1)
+      K1=PN1(2,L1)
+      DO 1 L2=INI2,FIN2
+      N=I1+PN2(1,L2)
+      NN=I1+PN2(2,L2)
+      KV=K1+PN2(3,L2)
+**    WRITE(IOUT,*) 'PNI+',N,NN,ZPN(KV),KV,K1
+      IF(N-NN) 3,2,1
+3     VFIN(N)=VFIN(N)+VINI(NN)*ZPN(KV)
+2     VFIN(NN)=VFIN(NN)+VINI(N)*ZPN(KV)
+1     CONTINUE
+      RETURN
+      END
+*
+************************************************************************
+*
+      SUBROUTINE QPRNIM (VFIN,VINI,PN1,PN2,ZPN)
+      IMPLICIT INTEGER (A-U)
+      IMPLICIT DOUBLE PRECISION (V-Z)
+      DIMENSION VINI(*),VFIN(*),PN1(2,*),PN2(3,*),ZPN(*)
+      COMMON IOUT,IPRI,ORDI,IPREC,CAS
+      COMMON /INIFIN/ INI1,FIN1,INI2,FIN2
+      DO 1 L1=INI1,FIN1
+      I1=PN1(1,L1)
+      K1=PN1(2,L1)
+      DO 1 L2=INI2,FIN2
+      N=I1+PN2(1,L2)
+      NN=I1+PN2(2,L2)
+      KV=K1+PN2(3,L2)
+**    WRITE(IOUT,*) 'PNI-',N,NN,-ZPN(KV),KV,K1
+      IF(N-NN) 3,2,1
+3     VFIN(N)=VFIN(N)-VINI(NN)*ZPN(KV)
+2     VFIN(NN)=VFIN(NN)-VINI(N)*ZPN(KV)
+1     CONTINUE
+      RETURN
+      END
+*
+************************************************************************
+*
+      SUBROUTINE SPRNIP (VFIN,VINI,PN1,PN2,ZPN)
+      IMPLICIT INTEGER (A-U)
+**    IMPLICIT DOUBLE PRECISION (V-Z)
+      DIMENSION VINI(*),VFIN(*),PN1(2,*),PN2(3,*),ZPN(*)
+      COMMON IOUT,IPRI,ORDI,IPREC,CAS
+      COMMON /INIFIN/ INI1,FIN1,INI2,FIN2
+      DO 1 L1=INI1,FIN1
+      I1=PN1(1,L1)
+      K1=PN1(2,L1)
+      DO 1 L2=INI2,FIN2
+      N=I1+PN2(1,L2)
+      NN=I1+PN2(2,L2)
+      KV=K1+PN2(3,L2)
+      IF(N-NN) 3,2,1
+3     VFIN(N)=VFIN(N)+VINI(NN)*ZPN(KV)
+2     VFIN(NN)=VFIN(NN)+VINI(N)*ZPN(KV)
+1     CONTINUE
+      RETURN
+      END
+*
+************************************************************************
+*
+      SUBROUTINE SPRNIM (VFIN,VINI,PN1,PN2,ZPN)
+      IMPLICIT INTEGER (A-U)
+**    IMPLICIT DOUBLE PRECISION (V-Z)
+      DIMENSION VINI(*),VFIN(*),PN1(2,*),PN2(3,*),ZPN(*)
+      COMMON IOUT,IPRI,ORDI,IPREC,CAS
+      COMMON /INIFIN/ INI1,FIN1,INI2,FIN2
+      DO 1 L1=INI1,FIN1
+      I1=PN1(1,L1)
+      K1=PN1(2,L1)
+      DO 1 L2=INI2,FIN2
+      N=I1+PN2(1,L2)
+      NN=I1+PN2(2,L2)
+      KV=K1+PN2(3,L2)
+      IF(N-NN) 3,2,1
+3     VFIN(N)=VFIN(N)-VINI(NN)*ZPN(KV)
+2     VFIN(NN)=VFIN(NN)-VINI(N)*ZPN(KV)
+1     CONTINUE
+      RETURN
+      END
+*
+************************************************************************
+*
